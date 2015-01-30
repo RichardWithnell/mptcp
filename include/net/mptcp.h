@@ -228,7 +228,7 @@ struct mptcp_pm_ops {
 			     struct net *net, bool *low_prio);
 	void (*addr_signal)(struct sock *sk, unsigned *size,
 			    struct tcp_out_options *opts, struct sk_buff *skb);
-	void (*add_raddr)(struct mptcp_cb *mpcb, const union inet_addr *addr, 
+	void (*add_raddr)(struct mptcp_cb *mpcb, const union inet_addr *addr,
 			  sa_family_t family, __be16 port, u8 id);
 	void (*rem_raddr)(struct mptcp_cb *mpcb, u8 rem_id);
 	void (*init_subsocket_v4)(struct sock *sk, struct in_addr addr);
@@ -324,7 +324,7 @@ struct mptcp_cb {
 				      struct request_sock *req,
 				      struct dst_entry *dst);
 
-	u32 path_index_bits;
+	u64 path_index_bits;
 	/* Next pi to pick up in case a new path becomes available */
 	u8 next_path_index;
 
