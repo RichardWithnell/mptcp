@@ -484,5 +484,3 @@ void mptcp_pm_v4_undo(void)
 	kmem_cache_destroy(mptcp_request_sock_ops.slab);
 	kfree(mptcp_request_sock_ops.slab_name);
 }
-
-
