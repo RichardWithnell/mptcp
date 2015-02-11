@@ -229,8 +229,8 @@ struct mptcp_pm_ops {
 	void (*addr_signal)(struct sock *sk, unsigned *size,
 			    struct tcp_out_options *opts, struct sk_buff *skb);
 	void (*add_raddr)(struct mptcp_cb *mpcb, const union inet_addr *addr,
-			  sa_family_t family, __be16 port, u64 id);
-	void (*rem_raddr)(struct mptcp_cb *mpcb, u64 rem_id);
+			  sa_family_t family, __be16 port, u8 id);
+	void (*rem_raddr)(struct mptcp_cb *mpcb, u8 rem_id);
 	void (*init_subsocket_v4)(struct sock *sk, struct in_addr addr);
 	void (*init_subsocket_v6)(struct sock *sk, struct in6_addr addr);
 
@@ -294,6 +294,7 @@ struct mptcp_cb {
 	u8 dfin_path_index;
 
 //#define MPTCP_PM_SIZE 608
+//#define MPTCP_PM_SIZE 720
 #define MPTCP_PM_SIZE 8192
 
 	u8 mptcp_pm[MPTCP_PM_SIZE] __aligned(8);
@@ -693,12 +694,24 @@ extern struct workqueue_struct *mptcp_wq;
 	     __sk = __temp,						\
 	     __temp = __sk ? (struct sock *)tcp_sk(__sk)->mptcp->next : NULL)
 
+static inline int ffsll (long long int i)
+{
+	unsigned long long int x = i & -i;
+	if (x <= 0xffffffff) return ffs (i);
+	else return 32 + ffs (i >> 32);
+}
+
 /* Iterates over all bit set to 1 in a bitset */
 #define mptcp_for_each_bit_set(b, i)					\
-	for (i = fls64(b) - 1; i >= 0; i = fls64(b >> (i + 1) << (i + 1)) - 1)
+	for (i = ffsll(b) - 1; (i >= 0) && (i + 1 != 64); i = ffsll(b >> (i + 1) << (i + 1)) - 1)
 
 #define mptcp_for_each_bit_unset(b, i)					\
 	mptcp_for_each_bit_set(~b, i)
+
+
+#define fsll
+
+
 
 extern struct lock_class_key meta_key;
 extern struct lock_class_key meta_slock_key;
@@ -1262,21 +1275,23 @@ static inline bool mptcp_fallback_infinite(struct sock *sk, int flag)
 }
 
 /* Find the first free index in the bitfield */
-static inline int __mptcp_find_free_index(u8 bitfield, u8 base)
+static inline int __mptcp_find_free_index(u64 bitfield, u8 base)
 {
-	long long int i;
+	int i;
 	mptcp_for_each_bit_unset(bitfield >> base, i) {
 		/* We wrapped at the bitfield - try from 0 on */
 		if (i + base >= sizeof(bitfield) * 8) {
 			mptcp_for_each_bit_unset(bitfield, i) {
-				if (i >= sizeof(bitfield) * 8)
+				if (i >= sizeof(bitfield) * 8){
 					goto exit;
+				}
 				return i;
 			}
 			goto exit;
 		}
-		if (i + base >= sizeof(bitfield) * 8)
+		if (i + base >= sizeof(bitfield) * 8){
 			break;
+		}
 
 		return i + base;
 	}
@@ -1284,7 +1299,7 @@ exit:
 	return -1;
 }
 
-static inline int mptcp_find_free_index(u8 bitfield)
+static inline int mptcp_find_free_index(u64 bitfield)
 {
 	return __mptcp_find_free_index(bitfield, 0);
 }
@@ -1293,24 +1308,22 @@ static inline int mptcp_find_free_index(u8 bitfield)
 static inline u8 mptcp_set_new_pathindex(struct mptcp_cb *mpcb)
 {
 	u8 base = mpcb->next_path_index;
-	long long int i;
+	int i;
 
 	/* Start at 1, because 0 is reserved for the meta-sk */
 	mptcp_for_each_bit_unset(mpcb->path_index_bits >> base, i) {
 		if (i + base < 1)
 			continue;
-		if (i + base >= sizeof(mpcb->path_index_bits) * 8){
+		if (i + base >= sizeof(mpcb->path_index_bits) * 8)
 			break;
-		}
 		i += base;
 		mpcb->path_index_bits |= (1LLU << i);
 		mpcb->next_path_index = i + 1;
 		return i;
 	}
 	mptcp_for_each_bit_unset(mpcb->path_index_bits, i) {
-		if (i >= sizeof(mpcb->path_index_bits) * 8){
+		if (i >= sizeof(mpcb->path_index_bits) * 8)
 			break;
-		}
 		if (i < 1)
 			continue;
 		mpcb->path_index_bits |= (1LLU << i);

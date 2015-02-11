@@ -19,10 +19,11 @@ enum {
 /* Max number of local or remote addresses we can store.
  * When changing, see the bitfield below in fullmesh_rem4/6.
  */
-#define MPTCP_MAX_ADDR	64
+#define MPTCP_MAX_REM_ADDR	64
+#define MPTCP_MAX_LOC_ADDR	64
 
 struct fullmesh_rem4 {
-	u64		rem4_id;
+	u8		rem4_id;
 	u64		bitfield;
 	u64		retry_bitfield;
 	__be16		port;
@@ -30,7 +31,7 @@ struct fullmesh_rem4 {
 };
 
 struct fullmesh_rem6 {
-	u64		rem6_id;
+	u8		rem6_id;
 	u64		bitfield;
 	u64		retry_bitfield;
 	__be16		port;
@@ -38,13 +39,14 @@ struct fullmesh_rem6 {
 };
 
 struct mptcp_loc_addr {
-	struct mptcp_loc4 locaddr4[MPTCP_MAX_ADDR];
 	u64 loc4_bits;
-	u64 next_v4_index;
-
-	struct mptcp_loc6 locaddr6[MPTCP_MAX_ADDR];
 	u64 loc6_bits;
-	u64 next_v6_index;
+
+	u8 next_v4_index;
+	u8 next_v6_index;
+
+	struct mptcp_loc4 locaddr4[MPTCP_MAX_LOC_ADDR];
+	struct mptcp_loc6 locaddr6[MPTCP_MAX_LOC_ADDR];
 };
 
 struct mptcp_addr_event {
@@ -62,12 +64,12 @@ struct fullmesh_priv {
 	struct delayed_work subflow_retry_work;
 
 	/* Remote addresses */
-	struct fullmesh_rem4 remaddr4[MPTCP_MAX_ADDR];
-	struct fullmesh_rem6 remaddr6[MPTCP_MAX_ADDR];
+	struct fullmesh_rem4 remaddr4[MPTCP_MAX_REM_ADDR];
+	struct fullmesh_rem6 remaddr6[MPTCP_MAX_REM_ADDR];
 
 	struct mptcp_cb *mpcb;
 
-	u16 remove_addrs; /* Addresses to remove */
+	u64 remove_addrs; /* Addresses to remove */
 	u64 announced_addrs_v4; /* IPv4 Addresses we did announce */
 	u64 announced_addrs_v6; /* IPv6 Addresses we did announce */
 
@@ -102,9 +104,9 @@ static struct fullmesh_priv *fullmesh_get_priv(const struct mptcp_cb *mpcb)
 
 static void mptcp_addv4_raddr(struct mptcp_cb *mpcb,
 			      const struct in_addr *addr,
-			      __be16 port, u64 id)
+			      __be16 port, u8 id)
 {
-	long long int i;
+	int i;
 	struct fullmesh_rem4 *rem4;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
@@ -124,7 +126,7 @@ static void mptcp_addv4_raddr(struct mptcp_cb *mpcb,
 		 */
 		if (rem4->rem4_id == id && rem4->addr.s_addr != addr->s_addr) {
 			/* update the address */
-			mptcp_debug("%s: updating old addr:%pI4 to addr %pI4 with id:%llu\n",
+			mptcp_debug("%s: updating old addr:%pI4 to addr %pI4 with id:%d\n",
 				    __func__, &rem4->addr.s_addr,
 				    &addr->s_addr, id);
 			rem4->addr.s_addr = addr->s_addr;
@@ -138,7 +140,7 @@ static void mptcp_addv4_raddr(struct mptcp_cb *mpcb,
 	/* Do we have already the maximum number of local/remote addresses? */
 	if (i < 0) {
 		mptcp_debug("%s: At max num of remote addresses: %d --- not adding address: %pI4\n",
-			    __func__, MPTCP_MAX_ADDR, &addr->s_addr);
+			    __func__, MPTCP_MAX_REM_ADDR, &addr->s_addr);
 		return;
 	}
 
@@ -147,20 +149,20 @@ static void mptcp_addv4_raddr(struct mptcp_cb *mpcb,
 	/* Address is not known yet, store it */
 	rem4->addr.s_addr = addr->s_addr;
 	rem4->port = port;
-	rem4->bitfield = 0;
-	rem4->retry_bitfield = 0;
+	rem4->bitfield = 0LLU;
+	rem4->retry_bitfield = 0LLU;
 	rem4->rem4_id = id;
 	mpcb->list_rcvd = 1;
-	fmp->rem4_bits |= (1 << i);
+	fmp->rem4_bits |= (1LLU << i);
 
 	return;
 }
 
 static void mptcp_addv6_raddr(struct mptcp_cb *mpcb,
 			      const struct in6_addr *addr,
-			      __be16 port, u64 id)
+			      __be16 port, u8 id)
 {
-	long long int i;
+	int i;
 	struct fullmesh_rem6 *rem6;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
@@ -180,7 +182,7 @@ static void mptcp_addv6_raddr(struct mptcp_cb *mpcb,
 		 */
 		if (rem6->rem6_id == id) {
 			/* update the address */
-			mptcp_debug("%s: updating old addr: %pI6 to addr %pI6 with id:%llu\n",
+			mptcp_debug("%s: updating old addr: %pI6 to addr %pI6 with id:%d\n",
 				    __func__, &rem6->addr, addr, id);
 			rem6->addr = *addr;
 			rem6->port = port;
@@ -193,7 +195,7 @@ static void mptcp_addv6_raddr(struct mptcp_cb *mpcb,
 	/* Do we have already the maximum number of local/remote addresses? */
 	if (i < 0) {
 		mptcp_debug("%s: At max num of remote addresses: %d --- not adding address: %pI6\n",
-			    __func__, MPTCP_MAX_ADDR, addr);
+			    __func__, MPTCP_MAX_REM_ADDR, addr);
 		return;
 	}
 
@@ -202,18 +204,18 @@ static void mptcp_addv6_raddr(struct mptcp_cb *mpcb,
 	/* Address is not known yet, store it */
 	rem6->addr = *addr;
 	rem6->port = port;
-	rem6->bitfield = 0;
-	rem6->retry_bitfield = 0;
+	rem6->bitfield = 0LLU;
+	rem6->retry_bitfield = 0LLU;
 	rem6->rem6_id = id;
 	mpcb->list_rcvd = 1;
-	fmp->rem6_bits |= (1 << i);
+	fmp->rem6_bits |= (1LLU << i);
 
 	return;
 }
 
-static void mptcp_v4_rem_raddress(struct mptcp_cb *mpcb, u64 id)
+static void mptcp_v4_rem_raddress(struct mptcp_cb *mpcb, u8 id)
 {
-	long long int i;
+	int i;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
 	mptcp_for_each_bit_set(fmp->rem4_bits, i) {
@@ -226,9 +228,9 @@ static void mptcp_v4_rem_raddress(struct mptcp_cb *mpcb, u64 id)
 	}
 }
 
-static void mptcp_v6_rem_raddress(struct mptcp_cb *mpcb, u64 id)
+static void mptcp_v6_rem_raddress(struct mptcp_cb *mpcb, u8 id)
 {
-	long long int i;
+	int i;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
 	mptcp_for_each_bit_set(fmp->rem6_bits, i) {
@@ -243,9 +245,9 @@ static void mptcp_v6_rem_raddress(struct mptcp_cb *mpcb, u64 id)
 
 /* Sets the bitfield of the remote-address field */
 static void mptcp_v4_set_init_addr_bit(struct mptcp_cb *mpcb,
-				       const struct in_addr *addr, u64 index)
+				       const struct in_addr *addr, u8 index)
 {
-	long long int i;
+	int i;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
 	mptcp_for_each_bit_set(fmp->rem4_bits, i) {
@@ -258,9 +260,9 @@ static void mptcp_v4_set_init_addr_bit(struct mptcp_cb *mpcb,
 
 /* Sets the bitfield of the remote-address field */
 static void mptcp_v6_set_init_addr_bit(struct mptcp_cb *mpcb,
-				       const struct in6_addr *addr, u64 index)
+				       const struct in6_addr *addr, u8 index)
 {
-	long long int i;
+	int i;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 
 	mptcp_for_each_bit_set(fmp->rem6_bits, i) {
@@ -273,7 +275,7 @@ static void mptcp_v6_set_init_addr_bit(struct mptcp_cb *mpcb,
 
 static void mptcp_set_init_addr_bit(struct mptcp_cb *mpcb,
 				    const union inet_addr *addr,
-				    sa_family_t family, u64 id)
+				    sa_family_t family, u8 id)
 {
 	if (family == AF_INET)
 		mptcp_v4_set_init_addr_bit(mpcb, &addr->in, id);
@@ -293,8 +295,8 @@ static void retry_subflow_worker(struct work_struct *work)
 	struct sock *meta_sk = mpcb->meta_sk;
 	struct mptcp_loc_addr *mptcp_local;
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(sock_net(meta_sk));
-	int iter = 0;
-	long long int i = 0;
+	int iter = 0, i;
+
 	/* We need a local (stable) copy of the address-list. Really, it is not
 	 * such a big deal, if the address-list is not 100% up-to-date.
 	 */
@@ -346,7 +348,7 @@ next_subflow:
 
 		/* Do we need to retry establishing a subflow ? */
 		if (rem->retry_bitfield) {
-			long long int i = mptcp_find_free_index(~rem->retry_bitfield);
+			int i = mptcp_find_free_index(~rem->retry_bitfield);
 			struct mptcp_rem6 rem6;
 
 			rem->bitfield |= (1LLU << i);
@@ -385,7 +387,7 @@ static void create_subflow_worker(struct work_struct *work)
 	struct mptcp_loc_addr *mptcp_local;
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(sock_net(meta_sk));
 	int iter = 0, retry = 0;
-	long long int i;
+	int i;
 
 	/* We need a local (stable) copy of the address-list. Really, it is not
 	 * such a big deal, if the address-list is not 100% up-to-date.
@@ -484,7 +486,7 @@ exit:
 	sock_put(meta_sk);
 }
 
-static void announce_remove_addr(u64 addr_id, struct sock *meta_sk)
+static void announce_remove_addr(u8 addr_id, struct sock *meta_sk)
 {
 	struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
@@ -501,7 +503,7 @@ static void update_addr_bitfields(struct sock *meta_sk,
 {
 	struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
-	long long int i;
+	int i;
 
 	/* The bits in announced_addrs_* always match with loc*_bits. So, a
 	 * simply & operation unsets the correct bits, because these go from
@@ -525,7 +527,7 @@ static void update_addr_bitfields(struct sock *meta_sk,
 static int mptcp_find_address(struct mptcp_loc_addr *mptcp_local,
 			      sa_family_t family, union inet_addr *addr)
 {
-	long long int i;
+	int i;
 	u64 loc_bits;
 	bool found = false;
 
@@ -535,14 +537,14 @@ static int mptcp_find_address(struct mptcp_loc_addr *mptcp_local,
 		loc_bits = mptcp_local->loc6_bits;
 
 	mptcp_for_each_bit_set(loc_bits, i) {
+
 		if (family == AF_INET &&
 		    mptcp_local->locaddr4[i].addr.s_addr == addr->in.s_addr) {
 			found = true;
 			break;
 		}
 		if (family == AF_INET6 &&
-		    ipv6_addr_equal(&mptcp_local->locaddr6[i].addr,
-				    &addr->in6)) {
+		    ipv6_addr_equal(&mptcp_local->locaddr6[i].addr, &addr->in6)) {
 			found = true;
 			break;
 		}
@@ -565,10 +567,11 @@ static void mptcp_address_worker(struct work_struct *work)
 	struct net *net = fm_ns->net;
 	struct mptcp_addr_event *event = NULL;
 	struct mptcp_loc_addr *mptcp_local, *old;
-	long long int i, id = -1; /* id is used in the socket-code on a delete-event */
+	int i, id = -1; /* id is used in the socket-code on a delete-event */
 	bool success; /* Used to indicate if we succeeded handling the event */
 
 next_event:
+
 	success = false;
 	kfree(event);
 
@@ -604,16 +607,18 @@ next_event:
 			goto duno;
 
 		if (event->family == AF_INET)
-			mptcp_local->loc4_bits &= ~(1 << id);
+			mptcp_local->loc4_bits &= ~(1LLU << id);
 		else
-			mptcp_local->loc6_bits &= ~(1 << id);
+			mptcp_local->loc6_bits &= ~(1LLU << id);
 
 		rcu_assign_pointer(fm_ns->local, mptcp_local);
 		kfree(old);
 	} else {
-		int i = mptcp_find_address(mptcp_local, event->family, &event->addr);
-		int j = i;
+		int i, j = 0;
 
+		i = mptcp_find_address(mptcp_local, event->family, &event->addr);
+
+		j = i;
 		if (j < 0) {
 			/* Not in the list, so we have to find an empty slot */
 			if (event->family == AF_INET)
@@ -653,7 +658,7 @@ next_event:
 			mptcp_local->locaddr4[i].low_prio = event->low_prio;
 		} else {
 			mptcp_local->locaddr6[i].addr = event->addr.in6;
-			mptcp_local->locaddr6[i].loc6_id = i + MPTCP_MAX_ADDR;
+			mptcp_local->locaddr6[i].loc6_id = i + MPTCP_MAX_LOC_ADDR;
 			mptcp_local->locaddr6[i].low_prio = event->low_prio;
 		}
 
@@ -1106,7 +1111,7 @@ static struct notifier_block mptcp_pm_netdev_notifier = {
 
 static void full_mesh_add_raddr(struct mptcp_cb *mpcb,
 				const union inet_addr *addr,
-				sa_family_t family, __be16 port, u64 id)
+				sa_family_t family, __be16 port, u8 id)
 {
 	if (family == AF_INET)
 		mptcp_addv4_raddr(mpcb, &addr->in, port, id);
@@ -1121,7 +1126,7 @@ static void full_mesh_new_session(struct sock *meta_sk)
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(sock_net(meta_sk));
 	struct tcp_sock *master_tp = tcp_sk(mpcb->master_sk);
-	long long int i, index;
+	int i, index;
 	union inet_addr saddr, daddr;
 	sa_family_t family;
 
@@ -1185,9 +1190,9 @@ static void full_mesh_new_session(struct sock *meta_sk)
 	rcu_read_unlock();
 
 	if (family == AF_INET)
-		fmp->announced_addrs_v4 |= (1 << index);
+		fmp->announced_addrs_v4 |= (1LLU << index);
 	else
-		fmp->announced_addrs_v6 |= (1 << index);
+		fmp->announced_addrs_v6 |= (1LLU << index);
 
 	for (i = fmp->add_addr; i && fmp->add_addr; i--)
 		tcp_send_ack(mpcb->master_sk);
@@ -1233,7 +1238,7 @@ static void full_mesh_release_sock(struct sock *meta_sk)
 	struct fullmesh_priv *fmp = fullmesh_get_priv(mpcb);
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(sock_net(meta_sk));
 	struct sock *sk, *tmpsk;
-	long long int i;
+	int i;
 
 	rcu_read_lock();
 	mptcp_local = rcu_dereference(fm_ns->local);
@@ -1354,7 +1359,7 @@ static int full_mesh_get_local_id(sa_family_t family, union inet_addr *addr,
 {
 	struct mptcp_loc_addr *mptcp_local;
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(net);
-	long long int index, id = -1;
+	int index, id = -1;
 
 	/* Handle the backup-flows */
 	rcu_read_lock();
@@ -1455,7 +1460,7 @@ remove_addr:
 		fmp->remove_addrs = 0;
 }
 
-static void full_mesh_rem_raddr(struct mptcp_cb *mpcb, u64 rem_id)
+static void full_mesh_rem_raddr(struct mptcp_cb *mpcb, u8 rem_id)
 {
 	mptcp_v4_rem_raddress(mpcb, rem_id);
 	mptcp_v6_rem_raddress(mpcb, rem_id);
@@ -1467,28 +1472,28 @@ static int mptcp_fm_seq_show(struct seq_file *seq, void *v)
 	struct net *net = seq->private;
 	struct mptcp_loc_addr *mptcp_local;
 	struct mptcp_fm_ns *fm_ns = fm_get_ns(net);
-	long long int i;
+	int i;
 
 	seq_printf(seq, "Index, Address-ID, Backup, IP-address\n");
 
 	rcu_read_lock_bh();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
-	seq_printf(seq, "IPv4, next v4-index: %llu\n", mptcp_local->next_v4_index);
+	seq_printf(seq, "IPv4, next v4-index: %u\n", mptcp_local->next_v4_index);
 
 	mptcp_for_each_bit_set(mptcp_local->loc4_bits, i) {
 		struct mptcp_loc4 *loc4 = &mptcp_local->locaddr4[i];
 
-		seq_printf(seq, "%llu, %llu, %u, %pI4\n", i, loc4->loc4_id,
+		seq_printf(seq, "%u, %u, %u, %pI4\n", i, loc4->loc4_id,
 			   loc4->low_prio, &loc4->addr);
 	}
 
-	seq_printf(seq, "IPv6, next v6-index: %llu\n", mptcp_local->next_v6_index);
+	seq_printf(seq, "IPv6, next v6-index: %u\n", mptcp_local->next_v6_index);
 
 	mptcp_for_each_bit_set(mptcp_local->loc6_bits, i) {
 		struct mptcp_loc6 *loc6 = &mptcp_local->locaddr6[i];
 
-		seq_printf(seq, "%llu, %llu, %u, %pI6\n", i, loc6->loc6_id,
+		seq_printf(seq, "%u, %u, %u, %pI6\n", i, loc6->loc6_id,
 			   loc6->low_prio, &loc6->addr);
 	}
 	rcu_read_unlock_bh();
@@ -1519,7 +1524,7 @@ static int mptcp_fm_init_net(struct net *net)
 	if (!fm_ns)
 		return -ENOBUFS;
 
-	mptcp_local = kzalloc(sizeof(*mptcp_local), GFP_KERNEL);
+	mptcp_local = kzalloc(sizeof(struct mptcp_loc_addr), GFP_KERNEL);
 	if (!mptcp_local) {
 		err = -ENOBUFS;
 		goto err_mptcp_local;
@@ -1598,10 +1603,6 @@ static struct mptcp_pm_ops full_mesh __read_mostly = {
 static int __init full_mesh_register(void)
 {
 	int ret;
-
-	;
-	mptcp_debug("%s: sizeof(struct fullmesh_priv): %d \n", __func__, sizeof(struct fullmesh_priv));
-
 
 	BUILD_BUG_ON(sizeof(struct fullmesh_priv) > MPTCP_PM_SIZE);
 
