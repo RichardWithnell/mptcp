@@ -19,8 +19,7 @@ enum {
 /* Max number of local or remote addresses we can store.
  * When changing, see the bitfield below in fullmesh_rem4/6.
  */
-#define MPTCP_MAX_REM_ADDR	64
-#define MPTCP_MAX_LOC_ADDR	64
+#define MPTCP_MAX_ADDR	64
 
 struct fullmesh_rem4 {
 	u8		rem4_id;
@@ -45,8 +44,8 @@ struct mptcp_loc_addr {
 	u8 next_v4_index;
 	u8 next_v6_index;
 
-	struct mptcp_loc4 locaddr4[MPTCP_MAX_LOC_ADDR];
-	struct mptcp_loc6 locaddr6[MPTCP_MAX_LOC_ADDR];
+	struct mptcp_loc4 locaddr4[MPTCP_MAX_ADDR];
+	struct mptcp_loc6 locaddr6[MPTCP_MAX_ADDR];
 };
 
 struct mptcp_addr_event {
@@ -64,8 +63,8 @@ struct fullmesh_priv {
 	struct delayed_work subflow_retry_work;
 
 	/* Remote addresses */
-	struct fullmesh_rem4 remaddr4[MPTCP_MAX_REM_ADDR];
-	struct fullmesh_rem6 remaddr6[MPTCP_MAX_REM_ADDR];
+	struct fullmesh_rem4 remaddr4[MPTCP_MAX_ADDR];
+	struct fullmesh_rem6 remaddr6[MPTCP_MAX_ADDR];
 
 	struct mptcp_cb *mpcb;
 
@@ -140,7 +139,7 @@ static void mptcp_addv4_raddr(struct mptcp_cb *mpcb,
 	/* Do we have already the maximum number of local/remote addresses? */
 	if (i < 0) {
 		mptcp_debug("%s: At max num of remote addresses: %d --- not adding address: %pI4\n",
-			    __func__, MPTCP_MAX_REM_ADDR, &addr->s_addr);
+			    __func__, MPTCP_MAX_ADDR, &addr->s_addr);
 		return;
 	}
 
@@ -195,7 +194,7 @@ static void mptcp_addv6_raddr(struct mptcp_cb *mpcb,
 	/* Do we have already the maximum number of local/remote addresses? */
 	if (i < 0) {
 		mptcp_debug("%s: At max num of remote addresses: %d --- not adding address: %pI6\n",
-			    __func__, MPTCP_MAX_REM_ADDR, addr);
+			    __func__, MPTCP_MAX_ADDR, addr);
 		return;
 	}
 
@@ -658,7 +657,7 @@ next_event:
 			mptcp_local->locaddr4[i].low_prio = event->low_prio;
 		} else {
 			mptcp_local->locaddr6[i].addr = event->addr.in6;
-			mptcp_local->locaddr6[i].loc6_id = i + MPTCP_MAX_LOC_ADDR;
+			mptcp_local->locaddr6[i].loc6_id = i + MPTCP_MAX_ADDR;
 			mptcp_local->locaddr6[i].low_prio = event->low_prio;
 		}
 
@@ -1523,6 +1522,7 @@ static int mptcp_fm_init_net(struct net *net)
 	fm_ns = kzalloc(sizeof(*fm_ns), GFP_KERNEL);
 	if (!fm_ns)
 		return -ENOBUFS;
+
 
 	mptcp_local = kzalloc(sizeof(struct mptcp_loc_addr), GFP_KERNEL);
 	if (!mptcp_local) {
