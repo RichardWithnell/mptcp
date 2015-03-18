@@ -699,17 +699,18 @@ static inline int ffsll (long long int i)
 	else return 32 + ffs (i >> 32);
 }
 
+static inline int find_next_bit(long long int b, int base)
+{
+	if(base >= sizeof(b) * 8) return -1;
+    else return ffsll(b >> base << base);
+}
+
 /* Iterates over all bit set to 1 in a bitset */
-#define mptcp_for_each_bit_set(b, i)					\
-	for (i = ffsll(b) - 1; (i >= 0) && (i + 1 != 64); i = ffsll(b >> (i + 1) << (i + 1)) - 1)
+#define mptcp_for_each_bit_set(b, i)	\
+	for (i = ffsll(b) - 1; i >= 0; i = find_next_bit(b, i + 1) - 1)
 
-#define mptcp_for_each_bit_unset(b, i)					\
+#define mptcp_for_each_bit_unset(b, i)	\
 	mptcp_for_each_bit_set(~b, i)
-
-
-#define fsll
-
-
 
 extern struct lock_class_key meta_key;
 extern struct lock_class_key meta_slock_key;
