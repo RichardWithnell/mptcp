@@ -1280,7 +1280,7 @@ static inline int __mptcp_find_free_index(u64 bitfield, u8 base)
 	mptcp_for_each_bit_unset(bitfield >> base, i) {
 		/* We wrapped at the bitfield - try from 0 on */
 		if (i + base >= sizeof(bitfield) * 8) {
-			mptcp_for_each_bit_unset(bitfield, i) {
+			mptcp_for_each_bit_unset(bitfield >> (base) ? 1 : 0, i) {
 				if (i >= sizeof(bitfield) * 8){
 					goto exit;
 				}
