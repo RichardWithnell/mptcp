@@ -593,6 +593,7 @@ next_event:
 	if (event->code == MPTCP_EVENT_DEL) {
 		id = mptcp_find_address(mptcp_local, event->family, &event->addr);
 
+		mptcp_debug("%s Found index to delete: %d\n", __func__, id);
 		/* Not in the list - so we don't care */
 		if (id < 0) {
 			mptcp_debug("%s could not find id\n", __func__);
@@ -605,10 +606,13 @@ next_event:
 		if (!mptcp_local)
 			goto duno;
 
-		if (event->family == AF_INET)
+		if (event->family == AF_INET) {
 			mptcp_local->loc4_bits &= ~(1LLU << id);
-		else
+			mptcp_local->next_v4_index = id;
+		} else {
 			mptcp_local->loc6_bits &= ~(1LLU << id);
+			mptcp_local->next_v6_index = id;
+		}
 
 		rcu_assign_pointer(fm_ns->local, mptcp_local);
 		kfree(old);
@@ -623,9 +627,12 @@ next_event:
 			if (event->family == AF_INET)
 				i = __mptcp_find_free_index(mptcp_local->loc4_bits,
 							    mptcp_local->next_v4_index);
+
 			if (event->family == AF_INET6)
 				i = __mptcp_find_free_index(mptcp_local->loc6_bits,
 							    mptcp_local->next_v6_index);
+			
+			mptcp_debug("%s Found free index: %d\n", __func__, i);
 
 			if (i < 0) {
 				mptcp_debug("%s no more space\n", __func__);

@@ -1277,10 +1277,11 @@ static inline bool mptcp_fallback_infinite(struct sock *sk, int flag)
 static inline int __mptcp_find_free_index(u64 bitfield, u8 base)
 {
 	int i;
+	base = (base >= 64) ? 1 : base;
 	mptcp_for_each_bit_unset(bitfield >> base, i) {
 		/* We wrapped at the bitfield - try from 0 on */
 		if (i + base >= sizeof(bitfield) * 8) {
-			mptcp_for_each_bit_unset(bitfield >> (base) ? 1 : 0, i) {
+			mptcp_for_each_bit_unset(bitfield >> (base > 0) ? 1 : 0, i) {
 				if (i >= sizeof(bitfield) * 8){
 					goto exit;
 				}
