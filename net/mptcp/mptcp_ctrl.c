@@ -491,6 +491,8 @@ found:
 	return meta_sk;
 }
 
+EXPORT_SYMBOL(mptcp_hash_find);
+
 void mptcp_hash_remove_bh(struct tcp_sock *meta_tp)
 {
 	/* remove from the token hashtable */
