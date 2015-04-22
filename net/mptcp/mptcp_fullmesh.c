@@ -631,7 +631,7 @@ next_event:
 			if (event->family == AF_INET6)
 				i = __mptcp_find_free_index(mptcp_local->loc6_bits,
 							    mptcp_local->next_v6_index);
-			
+
 			mptcp_debug("%s Found free index: %d\n", __func__, i);
 
 			if (i < 0) {
