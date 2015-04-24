@@ -95,6 +95,7 @@ struct subflow_mod {
     u32 daddr;
     u32 saddr;
     u16 dport;
+	u32 locid;
     u8 action;
 };
 
@@ -107,6 +108,7 @@ struct context_priv {
 
     struct list_head flowmods;
 };
+
 
 void remove_session_from_daemon(struct work_struct *work)
 {
@@ -308,14 +310,23 @@ int recv_genl_context(struct sk_buff *skb, struct genl_info *info)
         mptcp_debug("Received nla of type %d and len %d. DADDR: %d\n", nla->nla_type, nla->nla_len, mod.daddr);
     }
 
-    nla = info->attrs[CONTEXT_DST_PORT];
-    if (nla == 0) {
-        mptcp_debug("Destination port not set\n");
-        return 0;
-    } else {
-        mod.dport = nla_get_u16(nla);
-        mptcp_debug("Received nla of type %d and len %d. DPORT: %d\n", nla->nla_type, nla->nla_len, mod.dport);
-    }
+	nla = info->attrs[CONTEXT_DST_PORT];
+	if (nla == 0) {
+		mptcp_debug("Destination port not set\n");
+		return 0;
+	} else {
+		mod.dport = nla_get_u16(nla);
+		mptcp_debug("Received nla of type %d and len %d. DPORT: %d\n", nla->nla_type, nla->nla_len, mod.dport);
+	}
+
+	nla = info->attrs[CONTEXT_LOC_ID];
+	if (nla == 0) {
+		mptcp_debug("Destination port not set\n");
+		return 0;
+	} else {
+		mod.locid = nla_get_u32(nla);
+		mptcp_debug("Received nla of type %d and len %d. Loc_ID: %d\n", nla->nla_type, nla->nla_len, mod.locid);
+	}
 
     if(gh->cmd == CONTEXT_CMD_CREATE_SUBFLOW) {
         mod.action = SUBFLOW_MOD_ADD;
@@ -415,7 +426,7 @@ next_flowmod:
         mptcp_debug("%s add subflow src:(%pI4:0) dst:(%pI4:%d)\n", __func__, &mod->saddr, &mod->daddr, mod->dport);
 
         loc.addr.s_addr = mod->saddr;
-        loc.loc4_id = 0;
+        loc.loc4_id = mod->locid;
         loc.low_prio = 0;
 
         rem.addr.s_addr = mod->daddr;
@@ -479,6 +490,8 @@ static void context_release_sock(struct sock *meta_sk)
     struct mptcp_cb *mpcb = tcp_sk(meta_sk)->mpcb;
     struct context_priv *pm_priv = (struct context_priv *)mpcb->mptcp_pm;
 
+	mptcp_debug("%s Context Release Sock\n", __func__);
+
     if (!work_pending(&pm_priv->remove_work)) {
         queue_work(mptcp_wq, &pm_priv->remove_work);
     }
@@ -511,7 +524,7 @@ static int context_get_local_id(sa_family_t family, union inet_addr *addr,
 
 static struct mptcp_pm_ops context __read_mostly = {
 	.new_session = context_new_session,
-    .release_sock = context_release_sock,
+    .close_sock = context_release_sock,
 	.fully_established = on_session_establishment,
 	.get_local_id = context_get_local_id,
 	.name = "contextaware",

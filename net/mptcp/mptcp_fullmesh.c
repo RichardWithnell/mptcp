@@ -1246,6 +1246,8 @@ static void full_mesh_release_sock(struct sock *meta_sk)
 	struct sock *sk, *tmpsk;
 	int i;
 
+	mptcp_debug("%s Full Mesh Release Sock\n", __func__);
+
 	rcu_read_lock();
 	mptcp_local = rcu_dereference(fm_ns->local);
 
