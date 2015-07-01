@@ -31,6 +31,12 @@ config MPTCP_NDIFFPORTS
 	  pair of IP-addresses, modifying the source-port. You can set the number
 	  of subflows via the mptcp_ndiffports-sysctl.
 
+config MPTCP_CONTEXTAWARE
+	tristate "MPTCP contextaware"
+	depends on MPTCP=y
+	---help---
+	  This path-management module leaves subflow creation to a user space daemon.
+
 config MPTCP_BINDER
 	tristate "MPTCP Binder"
 	depends on (MPTCP=y)
@@ -51,6 +57,9 @@ choice
 	config DEFAULT_NDIFFPORTS
 		bool "ndiff-ports" if MPTCP_NDIFFPORTS=y
 
+	config DEFAULT_CONTEXTAWARE
+		bool "contextaware" if MPTCP_CONTEXTAWARE=y
+
 	config DEFAULT_BINDER
 		bool "binder" if MPTCP_BINDER=y
 
@@ -64,8 +73,9 @@ endif
 config DEFAULT_MPTCP_PM
 	string
 	default "default" if DEFAULT_DUMMY
-	default "fullmesh" if DEFAULT_FULLMESH 
+	default "fullmesh" if DEFAULT_FULLMESH
 	default "ndiffports" if DEFAULT_NDIFFPORTS
+	default "contextaware" if DEFAULT_CONTEXTAWARE
 	default "binder" if DEFAULT_BINDER
 	default "default"
 
@@ -112,4 +122,3 @@ config DEFAULT_MPTCP_SCHED
 	default "default" if DEFAULT_SCHEDULER
 	default "roundrobin" if DEFAULT_ROUNDROBIN
 	default "default"
-

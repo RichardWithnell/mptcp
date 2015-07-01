@@ -464,8 +464,9 @@ begin:
 	hlist_nulls_for_each_entry_rcu(meta_tp, node, &tk_hashtable[hash],
 				       tk_table) {
 		meta_sk = (struct sock *)meta_tp;
-		if (token == meta_tp->mptcp_loc_token &&
-		    net_eq(net, sock_net(meta_sk))) {
+		if (token == meta_tp->mptcp_loc_token){
+		//&&
+		//    net_eq(net, sock_net(meta_sk))) {
 			if (unlikely(!atomic_inc_not_zero(&meta_sk->sk_refcnt)))
 				goto out;
 			if (unlikely(token != meta_tp->mptcp_loc_token ||
