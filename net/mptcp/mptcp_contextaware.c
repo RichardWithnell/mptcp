@@ -197,7 +197,7 @@ void register_session_with_daemon(struct work_struct *work)
     dport = inet_sk(meta_sk)->inet_dport;
     token = mpcb->mptcp_loc_token;
 
-    mptcp_debug("%s sending request to userspace %pI4 token: %04x\n", __func__, &eid, token);
+    mptcp_debug("%s sending request to userspace %pI4 (src: %pI4) token: %04x\n", __func__, &eid, saddr, token);
 
     skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 
@@ -240,7 +240,7 @@ void register_session_with_daemon(struct work_struct *work)
         return;
     }
 
-    rc = nla_put_u32(skb, CONTEXT_SRC_ADDR, saddr);
+    rc = nla_put_u32(skb, CONTEXT_SRC_ADDR, saddr->s_addr);
     if (rc != 0){
         mptcp_debug("%s could not add source address \n", __func__);
         return;
