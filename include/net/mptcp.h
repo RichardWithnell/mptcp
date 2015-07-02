@@ -221,6 +221,7 @@ struct mptcp_pm_ops {
 
 	/* Signal the creation of a new MPTCP-session. */
 	void (*new_session)(const struct sock *meta_sk);
+	void (*close_sock)(struct sock *meta_sk);
 	void (*release_sock)(struct sock *meta_sk);
 	void (*fully_established)(struct sock *meta_sk);
 	void (*new_remote_address)(struct sock *meta_sk);

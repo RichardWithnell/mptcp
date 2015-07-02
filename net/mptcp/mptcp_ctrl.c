@@ -1591,6 +1591,9 @@ void mptcp_close(struct sock *meta_sk, long timeout)
 	mptcp_debug("%s: Close of meta_sk with tok %#x\n",
 		    __func__, mpcb->mptcp_loc_token);
 
+	if (tcp_sk(meta_sk)->mpcb->pm_ops->close_sock)
+		tcp_sk(meta_sk)->mpcb->pm_ops->close_sock(meta_sk);
+
 	mutex_lock(&mpcb->mpcb_mutex);
 	lock_sock(meta_sk);
 
